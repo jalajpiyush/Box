@@ -1608,4 +1608,296 @@
             const processBtn = document.getElementById('processBtn');
             const downloadBtn = document.getElementById('downloadBtn');
             const resultContainer = document.getElementById('resultContainer');
-            const error
+                        const errorMessage = document.getElementById('errorMessage');
+            const progressContainer = document.querySelector('.progress-container');
+            
+            // File input change handler
+            fileInput.addEventListener('change', function() {
+                if (this.files.length > 0) {
+                    const fileNames = Array.from(this.files).map(file => file.name);
+                    fileName.textContent = fileNames.join(', ');
+                    processBtn.disabled = false;
+                } else {
+                    fileName.textContent = 'No file chosen';
+                    processBtn.disabled = true;
+                }
+                
+                // For image crop preview
+                if (toolId === 'crop-image' && this.files.length > 0) {
+                    const file = this.files[0];
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const cropPreviewImage = document.getElementById('cropPreviewImage');
+                        const cropSelection = document.getElementById('cropSelection');
+                        
+                        if (cropPreviewImage) {
+                            cropPreviewImage.src = e.target.result;
+                            cropPreviewImage.style.display = 'block';
+                            
+                            // Wait for image to load to set up crop selection
+                            cropPreviewImage.onload = function() {
+                                if (cropSelection) {
+                                    // Default selection is 50% of the image from the center
+                                    const width = cropPreviewImage.offsetWidth * 0.5;
+                                    const height = cropPreviewImage.offsetHeight * 0.5;
+                                    const left = cropPreviewImage.offsetWidth * 0.25;
+                                    const top = cropPreviewImage.offsetHeight * 0.25;
+                                    
+                                    cropSelection.style.display = 'block';
+                                    cropSelection.style.width = width + 'px';
+                                    cropSelection.style.height = height + 'px';
+                                    cropSelection.style.left = left + 'px';
+                                    cropSelection.style.top = top + 'px';
+                                    
+                                    // Simple drag functionality for crop selection
+                                    let isDragging = false;
+                                    let startX, startY, startLeft, startTop;
+                                    
+                                    cropSelection.addEventListener('mousedown', function(e) {
+                                        isDragging = true;
+                                        startX = e.clientX;
+                                        startY = e.clientY;
+                                        startLeft = parseInt(cropSelection.style.left);
+                                        startTop = parseInt(cropSelection.style.top);
+                                        e.preventDefault();
+                                    });
+                                    
+                                    document.addEventListener('mousemove', function(e) {
+                                        if (isDragging) {
+                                            const newLeft = startLeft + (e.clientX - startX);
+                                            const newTop = startTop + (e.clientY - startY);
+                                            
+                                            // Constrain within image bounds
+                                            const maxLeft = cropPreviewImage.offsetWidth - cropSelection.offsetWidth;
+                                            const maxTop = cropPreviewImage.offsetHeight - cropSelection.offsetHeight;
+                                            
+                                            cropSelection.style.left = Math.max(0, Math.min(newLeft, maxLeft)) + 'px';
+                                            cropSelection.style.top = Math.max(0, Math.min(newTop, maxTop)) + 'px';
+                                        }
+                                    });
+                                    
+                                    document.addEventListener('mouseup', function() {
+                                        isDragging = false;
+                                    });
+                                }
+                            };
+                        }
+                    };
+                    reader.readAsDataURL(file);
+                }
+            });
+            
+            // Range input event listeners
+            const qualityInput = document.getElementById('imageQuality');
+            if (qualityInput) {
+                const qualityValue = document.getElementById('qualityValue');
+                qualityInput.addEventListener('input', function() {
+                    qualityValue.textContent = this.value + '%';
+                });
+            }
+            
+            const brightnessInput = document.getElementById('brightness');
+            if (brightnessInput) {
+                const brightnessValue = document.getElementById('brightnessValue');
+                brightnessInput.addEventListener('input', function() {
+                    brightnessValue.textContent = this.value + '%';
+                });
+            }
+            
+            const contrastInput = document.getElementById('contrast');
+            if (contrastInput) {
+                const contrastValue = document.getElementById('contrastValue');
+                contrastInput.addEventListener('input', function() {
+                    contrastValue.textContent = this.value + '%';
+                });
+            }
+            
+            const sharpnessInput = document.getElementById('sharpness');
+            if (sharpnessInput) {
+                const sharpnessValue = document.getElementById('sharpnessValue');
+                sharpnessInput.addEventListener('input', function() {
+                    sharpnessValue.textContent = this.value + '%';
+                });
+            }
+            
+            const convertQualityInput = document.getElementById('convertQuality');
+            if (convertQualityInput) {
+                const convertQualityValue = document.getElementById('convertQualityValue');
+                convertQualityInput.addEventListener('input', function() {
+                    convertQualityValue.textContent = this.value + '%';
+                });
+            }
+            
+            // Split mode change handler
+            const splitMode = document.getElementById('splitMode');
+            const pageRangeGroup = document.getElementById('pageRangeGroup');
+            if (splitMode && pageRangeGroup) {
+                splitMode.addEventListener('change', function() {
+                    pageRangeGroup.style.display = this.value === 'range' ? 'block' : 'none';
+                });
+            }
+            
+            // Crop mode change handler
+            const cropMode = document.getElementById('cropMode');
+            const aspectRatioGroup = document.getElementById('aspectRatioGroup');
+            if (cropMode && aspectRatioGroup) {
+                cropMode.addEventListener('change', function() {
+                    aspectRatioGroup.style.display = this.value === 'preset' ? 'block' : 'none';
+                });
+            }
+            
+            // Process button click handler
+            processBtn.addEventListener('click', async function() {
+                errorMessage.style.display = 'none';
+                progressContainer.style.display = 'block';
+                
+                // Collect options
+                const options = {};
+                
+                // Get all inputs within the tool interface
+                const inputs = toolPreviewContent.querySelectorAll('input, select');
+                inputs.forEach(input => {
+                    if (input.type === 'checkbox') {
+                        options[input.id] = input.checked;
+                    } else if (input.type !== 'file') {
+                        options[input.id] = input.value;
+                    }
+                });
+                
+                try {
+                    // Process the files with the appropriate tool function
+                    const tool = tools[currentTool];
+                    const result = await tool.process(fileInput.files, options);
+                    
+                    if (result.success) {
+                        processedFileData = result.fileData;
+                        document.getElementById('successMessage').textContent = result.message;
+                        resultContainer.style.display = 'block';
+                    } else {
+                        throw new Error(result.message || 'Processing failed.');
+                    }
+                } catch (error) {
+                    errorMessage.textContent = error.message || 'An error occurred during processing.';
+                    errorMessage.style.display = 'block';
+                } finally {
+                    progressContainer.style.display = 'none';
+                }
+            });
+            
+            // Download button click handler
+            downloadBtn.addEventListener('click', function() {
+                if (processedFileData) {
+                    const link = document.createElement('a');
+                    link.href = processedFileData.url;
+                    link.download = processedFileData.name;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }
+            });
+            
+            // Show the modal
+            modal.style.display = 'flex';
+        }
+
+        // Initialize elements and event handlers
+        const modal = document.getElementById('toolModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const toolPreviewContent = document.getElementById('toolPreviewContent');
+        const closeModal = document.getElementById('closeModal');
+        
+        // Close modal button
+        closeModal.addEventListener('click', function() {
+            modal.style.display = 'none';
+            currentTool = null;
+            processedFileData = null;
+        });
+        
+        // Close modal when clicking outside
+        window.addEventListener('click', function(event) {
+            if (event.target === modal) {
+                modal.style.display = 'none';
+                currentTool = null;
+                processedFileData = null;
+            }
+        });
+        
+        // Tool link click handlers
+        document.querySelectorAll('.tool-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const toolId = this.getAttribute('data-tool');
+                showToolModal(toolId);
+            });
+        });
+        
+        // Navigation link click handlers
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const section = this.getAttribute('data-section');
+                const element = document.getElementById(section);
+                if (element) {
+                    window.scrollTo({
+                        top: element.offsetTop - 80,
+                        behavior: 'smooth'
+                    });
+                }
+            });
+        });
+        
+        // Home logo click handler
+        document.getElementById('homeLink').addEventListener('click', function(e) {
+            e.preventDefault();
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+        });
+        
+        // CTA buttons
+        document.getElementById('mainCtaBtn').addEventListener('click', function() {
+            const toolsSection = document.getElementById('tools');
+            window.scrollTo({
+                top: toolsSection.offsetTop - 80,
+                behavior: 'smooth'
+            });
+        });
+        
+        document.getElementById('learnMoreBtn').addEventListener('click', function() {
+            const featuresSection = document.getElementById('features');
+            window.scrollTo({
+                top: featuresSection.offsetTop - 80,
+                behavior: 'smooth'
+            });
+        });
+        
+        document.getElementById('getStartedBtn').addEventListener('click', function() {
+            const toolsSection = document.getElementById('tools');
+            window.scrollTo({
+                top: toolsSection.offsetTop - 80,
+                behavior: 'smooth'
+            });
+        });
+        
+        document.getElementById('finalCtaBtn').addEventListener('click', function() {
+            const toolsSection = document.getElementById('tools');
+            window.scrollTo({
+                top: toolsSection.offsetTop - 80,
+                behavior: 'smooth'
+            });
+        });
+        
+        // Newsletter form submit handler
+        document.getElementById('newsletterForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const email = document.getElementById('newsletterEmail').value;
+            if (email) {
+                alert(`Thank you for subscribing with ${email}! You will receive our latest updates.`);
+                this.reset();
+            }
+        });
+    </script>
+</body>
+</html>
+
